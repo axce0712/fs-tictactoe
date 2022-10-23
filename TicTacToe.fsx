@@ -1,93 +1,150 @@
-type Field =
+type Letter =
+    | X
+    | O
+
+type HorizontalPosition =
+    | Left
+    | HCenter
+    | Right
+
+type VerticalPosition =
+    | Top
+    | VCenter
+    | Bottom
+
+type Cell =
     | Empty
-    | X
-    | O
+    | Marked of Letter
 
-type Player =
-    | X
-    | O
+type Row = Cell * Cell * Cell
 
-type Point = { X: int; Y: int }
+type Board = Board of Row * Row * Row
 
-type Board = Field [,]
+type Position =
+    { Horizontal: HorizontalPosition
+      Vertical: VerticalPosition }
 
-let emptyBoard = Array2D.create 3 3 Empty
+let emptyBoard =
+    Board (
+        (Empty, Empty, Empty),
+        (Empty, Empty, Empty),
+        (Empty, Empty, Empty))
 
-let getAt point (board: Board) = board[point.Y, point.X]
+let get (pos: Position) (Board (rt, rc, rb)) : Cell =
+    match rt, rc, rb, pos with
+    | (x, _, _), _, _, { Horizontal = Left; Vertical = Top } -> x
+    | (_, x, _), _, _, { Horizontal = HCenter; Vertical = Top } -> x
+    | (_, _, x), _, _, { Horizontal = Right; Vertical = Top } -> x
+    | _, (x, _, _), _, { Horizontal = Left; Vertical = VCenter } -> x
+    | _, (_, x, _), _, { Horizontal = HCenter; Vertical = VCenter } -> x
+    | _, (_, _, x), _, { Horizontal = Right; Vertical = VCenter } -> x
+    | _, _, (x, _, _), { Horizontal = Left; Vertical = Bottom } -> x
+    | _, _, (_, x, _), { Horizontal = HCenter; Vertical = Bottom } -> x
+    | _, _, (_, _, x), { Horizontal = Right; Vertical = Bottom } -> x
 
-let setAt point value (board: Board) = board[point.Y, point.X] <- value
+let set (pos: Position) (x: Cell) (Board (rt, rc, rb)) : Board =
+    let newBoard =
+        match rt, rc, rb, pos with
+        | (_, c2, c3), r2, r3, { Horizontal = Left; Vertical = Top } -> (x, c2, c3), r2, r3
+        | (c1, _, c3), r2, r3, { Horizontal = HCenter; Vertical = Top } -> (c1, x, c3), r2, r3
+        | (c1, c2, _), r2, r3, { Horizontal = Right; Vertical = Top } -> (c1, c2, x), r2, r3
+        | r1, (_, c2, c3), r3, { Horizontal = Left; Vertical = VCenter } -> r1, (x, c2, c3), r3
+        | r1, (c1, _, c3), r3, { Horizontal = HCenter; Vertical = VCenter } -> r1, (c1, x, c3), r3
+        | r1, (c1, c2, _), r3, { Horizontal = Right; Vertical = VCenter } -> r1, (c1, c2, x), r3
+        | r1, r2, (_, c2, c3), { Horizontal = Left; Vertical = Bottom } -> r1, r2, (x, c2, c3)
+        | r1, r2, (c1, _, c3), { Horizontal = HCenter; Vertical = Bottom } -> r1, r2, (c1, x, c3)
+        | r1, r2, (c1, c2, _), { Horizontal = Right; Vertical = Bottom } -> r1, r2, (c1, c2, x)
 
-let applyMove player point (board: Board) =
-    let fieldValue =
-        match player with
-        | X -> Field.X
-        | O -> Field.O
+    Board newBoard
 
-    let content = getAt point board
+let change (f: Cell -> Cell) (position: Position) (board: Board) : Board =
+    set position (f (get position board)) board
 
-    if content <> Empty then
-        Error "Field at given point not empty"
-    else
-        setAt point fieldValue board
-        |> Ok
+let tryMark letter =
+    let modify cell =
+        match cell with
+        | Empty -> Marked letter
+        | _ -> cell
 
+    change modify
 
-let checkForWinnerInArray (row: Field array) =
-    let distinct = Array.distinct row
-    match distinct with
-    | [|f|] when f <> Empty -> Some f
-    | _ -> None
+let allPositions =
+    [
+        for hp in [ Left; HCenter; Right ] do
+            for vp in [ Top; VCenter; Bottom ] do
+                { Horizontal = hp; Vertical = vp }
+    ]
 
-let checkForWinner (board: Board) =
-    let rowWinner =
-        seq {0..2}
-        |> Seq.map (fun i -> checkForWinnerInArray board[i, *])
-    let columnWinner =
-        seq {0..2}
-        |> Seq.map (fun i -> checkForWinnerInArray board[*, i])
-    let firstDiagonalWinner =
-        seq {0..2}
-        |> Seq.map (fun i -> board[i, i])
-        |> Seq.toArray
-        |> checkForWinnerInArray
-        |> Seq.singleton
+let winningPositions =
+    [
+        // Horizontals
+        { Horizontal = Left; Vertical = Top }, { Horizontal = HCenter; Vertical = Top }, { Horizontal = Right; Vertical = Top }
+        { Horizontal = Left; Vertical = VCenter }, { Horizontal = HCenter; Vertical = VCenter }, { Horizontal = Right; Vertical = VCenter }
+        { Horizontal = Left; Vertical = Bottom }, { Horizontal = HCenter; Vertical = Bottom }, { Horizontal = Right; Vertical = Bottom }
 
-    let secondDiagonalWinner =
-        Seq.zip {0..2} {2..-1..0}
-        |> Seq.map(fun (y, x) -> board[y, x])
-        |> Seq.toArray
-        |> checkForWinnerInArray
-        |> Seq.singleton
+        // Verticals
+        { Horizontal = Left; Vertical = Top }, { Horizontal = Left; Vertical = VCenter }, { Horizontal = Left; Vertical = Bottom }
+        { Horizontal = HCenter; Vertical = Top }, { Horizontal = HCenter; Vertical = VCenter }, { Horizontal = HCenter; Vertical = Bottom }
+        { Horizontal = Right; Vertical = Top }, { Horizontal = Right; Vertical = VCenter }, { Horizontal = Right; Vertical = Bottom }
 
-    rowWinner
-    |> Seq.append columnWinner
-    |> Seq.append firstDiagonalWinner
-    |> Seq.append secondDiagonalWinner
-    |> Seq.tryFind (fun o -> o.IsSome)
+        // Diagonals
+        { Horizontal = Left; Vertical = Top }, { Horizontal = HCenter; Vertical = VCenter }, { Horizontal = Right; Vertical = Bottom}
+        { Horizontal = Right; Vertical = Top }, { Horizontal = HCenter; Vertical = VCenter }, { Horizontal = Left; Vertical = Bottom}
+    ]
 
+let tryFindWinner board =
+    let mapped =
+        winningPositions
+        |> List.map (fun (x, y, z) -> get x board, get y board, get z board)
 
-let theBoard: Field[,] = emptyBoard
+    mapped
+    |> List.choose (fun (x, y, z) ->
+        if x = y && y = z then
+            match x with
+            | Marked m -> Some m
+            | Empty -> None
+        else
+            None)
+    |> List.tryHead
 
-applyMove X {X = 1; Y = 0} theBoard
-applyMove O {X = 1; Y = 1} theBoard
-applyMove X {X = 0; Y = 1} theBoard
-applyMove O {X = 0; Y = 0} theBoard
-applyMove X {X = 2; Y = 0} theBoard
-applyMove O {X = 2; Y = 2} theBoard
+let areSlotsRemaining board =
+    allPositions
+    |> List.exists (fun p ->
+        match get p board with
+        | Empty -> true
+        | Marked _ -> false)
 
-printfn "%A" theBoard
+type GameState =
+    | InProgress
+    | Winner of Letter
+    | Tie
 
-printfn "%A" <| checkForWinner theBoard
+let outcome (board: Board) : GameState =
+    match tryFindWinner board, areSlotsRemaining board with
+    | Some letter, _ -> Winner letter
+    | None, true -> Tie
+    | _ -> InProgress
 
-let anotherBoard: Field[,] = emptyBoard
+let renderCell cell =
+    match cell with
+    | Empty -> " "
+    | Marked X -> "X"
+    | Marked O -> "O"
 
-applyMove X {X = 2; Y = 0} anotherBoard
-applyMove O {X = 0; Y = 1} anotherBoard
-applyMove X {X = 1; Y = 1} anotherBoard
-applyMove O {X = 2; Y = 1} anotherBoard
-applyMove X {X = 0; Y = 2} anotherBoard
+let switch letter =
+    match letter with
+    | X -> O
+    | O -> X
 
-printfn "%A" anotherBoard
+let render (Board ((a, b, c), (d, e, f), (g, h, i))) =
+    $@"
+{renderCell a}|{renderCell b}|{renderCell c}
+-+-+-
+{renderCell d}|{renderCell e}|{renderCell f}
+-+-+-
+{renderCell g}|{renderCell h}|{renderCell i}"
 
-printfn "%A" <| checkForWinner anotherBoard
-
+emptyBoard
+|> tryMark X { Horizontal = Left; Vertical = Top }
+|> tryMark O { Horizontal = Left; Vertical = VCenter }
+|> render 

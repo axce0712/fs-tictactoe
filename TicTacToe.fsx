@@ -18,116 +18,88 @@ type Cell =
 
 type Row = Cell * Cell * Cell
 
-type Board = Board of Row * Row * Row
+type Board = private Board of Row * Row * Row
 
 type Position =
     { Horizontal: HorizontalPosition
       Vertical: VerticalPosition }
 
-let emptyBoard : Board =
-    Board (
-        (Empty, Empty, Empty),
-        (Empty, Empty, Empty),
-        (Empty, Empty, Empty))
+module Board =
+    let empty : Board =
+        Board (
+            (Empty, Empty, Empty),
+            (Empty, Empty, Empty),
+            (Empty, Empty, Empty))
+            
+    let private allPositions : Position list =
+        [
+            for hp in [ Left; HCenter; Right ] do
+                for vp in [ Top; VCenter; Bottom ] do
+                    { Horizontal = hp; Vertical = vp }
+        ]
 
-let get (pos: Position) (board: Board) : Cell =
-    match board, pos with
-    | Board ((x, _, _), _, _), { Horizontal = Left; Vertical = Top } -> x
-    | Board ((_, x, _), _, _), { Horizontal = HCenter; Vertical = Top } -> x
-    | Board ((_, _, x), _, _), { Horizontal = Right; Vertical = Top } -> x
-    | Board (_, (x, _, _), _), { Horizontal = Left; Vertical = VCenter } -> x
-    | Board (_, (_, x, _), _), { Horizontal = HCenter; Vertical = VCenter } -> x
-    | Board (_, (_, _, x), _), { Horizontal = Right; Vertical = VCenter } -> x
-    | Board (_, _, (x, _, _)), { Horizontal = Left; Vertical = Bottom } -> x
-    | Board (_, _, (_, x, _)), { Horizontal = HCenter; Vertical = Bottom } -> x
-    | Board (_, _, (_, _, x)), { Horizontal = Right; Vertical = Bottom } -> x
+    let private getRow (position: VerticalPosition) (Board (r1, r2, r3)) : Row =
+        match position with
+        | Top -> r1
+        | VCenter -> r2
+        | Bottom -> r3
 
-let set (pos: Position) (x: Cell) (board: Board) : Board =
-    let newBoard =
-        match board, pos with
-        | Board ((_, c2, c3), r2, r3), { Horizontal = Left; Vertical = Top } -> (x, c2, c3), r2, r3
-        | Board ((c1, _, c3), r2, r3), { Horizontal = HCenter; Vertical = Top } -> (c1, x, c3), r2, r3
-        | Board ((c1, c2, _), r2, r3), { Horizontal = Right; Vertical = Top } -> (c1, c2, x), r2, r3
-        | Board (r1, (_, c2, c3), r3), { Horizontal = Left; Vertical = VCenter } -> r1, (x, c2, c3), r3
-        | Board (r1, (c1, _, c3), r3), { Horizontal = HCenter; Vertical = VCenter } -> r1, (c1, x, c3), r3
-        | Board (r1, (c1, c2, _), r3), { Horizontal = Right; Vertical = VCenter } -> r1, (c1, c2, x), r3
-        | Board (r1, r2, (_, c2, c3)), { Horizontal = Left; Vertical = Bottom } -> r1, r2, (x, c2, c3)
-        | Board (r1, r2, (c1, _, c3)), { Horizontal = HCenter; Vertical = Bottom } -> r1, r2, (c1, x, c3)
-        | Board (r1, r2, (c1, c2, _)), { Horizontal = Right; Vertical = Bottom } -> r1, r2, (c1, c2, x)
+    let private setRow (position: VerticalPosition) (value: Row) (Board (r1, r2, r3)) : Board =
+        match position with
+        | Top     -> Board (value, r2, r3)
+        | VCenter -> Board (r1, value, r3)
+        | Bottom  -> Board (r1, r2, value)
 
-    Board newBoard
+    let private getCell (position: HorizontalPosition) ((c1, c2, c3) : Row) : Cell =
+        match position with
+        | Left -> c1
+        | HCenter -> c2
+        | Right -> c3
+        
+    let private setCell (position: HorizontalPosition) (value: Cell) ((c1, c2, c3) : Row) : Row =
+        match position with
+        | Left    -> (value, c2, c3)
+        | HCenter -> (c1, value, c3)
+        | Right   -> (c1, c2, value)
 
-let tryMark (position: Position) (letter: Letter) (board: Board) : Board option =
-    match get position board with
-    | Empty -> set position (Marked letter) board |> Some
-    | Marked _ -> None 
+    let get (position: Position) (board: Board) : Cell =
+        board
+        |> getRow position.Vertical
+        |> getCell position.Horizontal
 
-let allPositions : Position list =
-    [
-        for hp in [ Left; HCenter; Right ] do
-            for vp in [ Top; VCenter; Bottom ] do
-                { Horizontal = hp; Vertical = vp }
-    ]
+    let set (position: Position) (value: Cell) (board: Board) : Board =
+        let newRow =
+            board
+            |> getRow position.Vertical
+            |> setCell position.Horizontal value
+        
+        setRow position.Vertical newRow board
 
-let winningPositions : (Position * Position * Position) list =
-    [
-        // Horizontals
-        ({ Horizontal = Left; Vertical = Top },
-         { Horizontal = HCenter; Vertical = Top },
-         { Horizontal = Right; Vertical = Top })
+    let tryMark (position: Position) (letter: Letter) (board: Board) : Board option =
+        match get position board with
+        | Empty -> set position (Marked letter) board |> Some
+        | Marked _ -> None 
 
-        ({ Horizontal = Left; Vertical = VCenter },
-         { Horizontal = HCenter; Vertical = VCenter },
-         { Horizontal = Right; Vertical = VCenter })
+    let areSlotsRemaining (board: Board) : bool =
+        allPositions
+        |> List.exists (fun p ->
+            match get p board with
+            | Empty -> true
+            | Marked _ -> false)
 
-        ({ Horizontal = Left; Vertical = Bottom },
-         { Horizontal = HCenter; Vertical = Bottom },
-         { Horizontal = Right; Vertical = Bottom })
-
-        // Verticals
-        ({ Horizontal = Left; Vertical = Top },
-         { Horizontal = Left; Vertical = VCenter },
-         { Horizontal = Left; Vertical = Bottom })
-
-        ({ Horizontal = HCenter; Vertical = Top },
-         { Horizontal = HCenter; Vertical = VCenter },
-         { Horizontal = HCenter; Vertical = Bottom })
-
-        ({ Horizontal = Right; Vertical = Top },
-         { Horizontal = Right; Vertical = VCenter },
-         { Horizontal = Right; Vertical = Bottom })
-
-        // Diagonals
-        ({ Horizontal = Left; Vertical = Top },
-         { Horizontal = HCenter; Vertical = VCenter },
-         { Horizontal = Right; Vertical = Bottom })
-
-        ({ Horizontal = Right; Vertical = Top },
-         { Horizontal = HCenter; Vertical = VCenter },
-         { Horizontal = Left; Vertical = Bottom })
-    ]
-
-let tryFindWinner (board: Board) : Letter option =
-    let mapped =
-        winningPositions
-        |> List.map (fun (x, y, z) -> get x board, get y board, get z board)
-
-    mapped
-    |> List.choose (fun (x, y, z) ->
-        if x = y && y = z then
-            match x with
-            | Marked letter -> Some letter
-            | Empty -> None
-        else
-            None)
-    |> List.tryHead
-
-let areSlotsRemaining (board: Board) : bool =
-    allPositions
-    |> List.exists (fun p ->
-        match get p board with
-        | Empty -> true
-        | Marked _ -> false)
+    let private renderCell (cell: Cell) : string =
+        match cell with
+        | Empty -> " "
+        | Marked X -> "X"
+        | Marked O -> "O"
+        
+    let render (Board ((a, b, c), (d, e, f), (g, h, i))) =
+        $@"
+{renderCell a}|{renderCell b}|{renderCell c}
+-+-+-
+{renderCell d}|{renderCell e}|{renderCell f}
+-+-+-
+{renderCell g}|{renderCell h}|{renderCell i}"
 
 type GameState =
     | InProgress of Letter
@@ -136,50 +108,93 @@ type GameState =
 
 type Game = { Board: Board; State: GameState }
 
-let initialGame = { Board = emptyBoard; State = InProgress X }
+module Game =
+    let initial = { Board = Board.empty; State = InProgress X }
 
-let switch letter =
-    match letter with
-    | X -> O
-    | O -> X
+    let winningPositions : (Position * Position * Position) list =
+        [
+            // Horizontals
+            ({ Horizontal = Left; Vertical = Top },
+             { Horizontal = HCenter; Vertical = Top },
+             { Horizontal = Right; Vertical = Top })
 
-let nextState (current: Letter) (board: Board) : GameState =
-    match tryFindWinner board, areSlotsRemaining board with
-    | Some letter, _ -> Winner letter
-    | None, false -> Tie
-    | _ -> InProgress (switch current)
+            ({ Horizontal = Left; Vertical = VCenter },
+             { Horizontal = HCenter; Vertical = VCenter },
+             { Horizontal = Right; Vertical = VCenter })
 
-let move pos game =
-    match game.State with
-    | InProgress letter ->
-        game.Board
-        |> tryMark pos letter
-        |> Option.map (fun b -> { Board = b; State = nextState letter b })
-        |> Option.defaultValue game
-    | Winner _ -> game
-    | Tie -> game
+            ({ Horizontal = Left; Vertical = Bottom },
+             { Horizontal = HCenter; Vertical = Bottom },
+             { Horizontal = Right; Vertical = Bottom })
 
-let renderCell cell =
-    match cell with
-    | Empty -> " "
-    | Marked X -> "X"
-    | Marked O -> "O"
-    
-let render (Board ((a, b, c), (d, e, f), (g, h, i))) =
-    $@"
-{renderCell a}|{renderCell b}|{renderCell c}
--+-+-
-{renderCell d}|{renderCell e}|{renderCell f}
--+-+-
-{renderCell g}|{renderCell h}|{renderCell i}"
+            // Verticals
+            ({ Horizontal = Left; Vertical = Top },
+             { Horizontal = Left; Vertical = VCenter },
+             { Horizontal = Left; Vertical = Bottom })
 
-initialGame
-|> move { Horizontal = Left; Vertical = Top }
-|> move { Horizontal = Left; Vertical = VCenter }
-|> move { Horizontal = HCenter; Vertical = Top }
-|> move { Horizontal = HCenter; Vertical = VCenter }
-|> move { Horizontal = Right; Vertical = Top }
-|> move { Horizontal = Right; Vertical = VCenter }
-|> fun game -> render game.Board
+            ({ Horizontal = HCenter; Vertical = Top },
+             { Horizontal = HCenter; Vertical = VCenter },
+             { Horizontal = HCenter; Vertical = Bottom })
+
+            ({ Horizontal = Right; Vertical = Top },
+             { Horizontal = Right; Vertical = VCenter },
+             { Horizontal = Right; Vertical = Bottom })
+
+            // Diagonals
+            ({ Horizontal = Left; Vertical = Top },
+             { Horizontal = HCenter; Vertical = VCenter },
+             { Horizontal = Right; Vertical = Bottom })
+
+            ({ Horizontal = Right; Vertical = Top },
+             { Horizontal = HCenter; Vertical = VCenter },
+             { Horizontal = Left; Vertical = Bottom })
+        ]
+
+    let private tryFindWinner (board: Board) : Letter option =
+        let mapped =
+            winningPositions
+            |> List.map (fun (x, y, z) -> Board.get x board, Board.get y board, Board.get z board)
+
+        mapped
+        |> List.choose (fun (x, y, z) ->
+            if x = y && y = z then
+                match x with
+                | Marked letter -> Some letter
+                | Empty -> None
+            else
+                None)
+        |> List.tryHead
+
+    let private switch (letter: Letter) : Letter =
+        match letter with
+        | X -> O
+        | O -> X
+
+    let private moveWhenInProgress (position: Position) (current: Letter) (game: Game) : Game =
+        match Board.tryMark position current game.Board with
+        | Some newBoard ->
+            let newState =
+                match tryFindWinner newBoard, Board.areSlotsRemaining newBoard with
+                | Some letter, _ -> Winner letter
+                | None, false -> Tie
+                | _ -> InProgress (switch current)
+
+            { Board = newBoard; State = newState }
+        | None -> game
+
+    let move (position : Position) (game : Game) : Game =
+        match game.State with
+        | InProgress letter -> moveWhenInProgress position letter game
+        | Winner _ -> game
+        | Tie -> game
+
+Game.initial
+|> Game.move { Horizontal = Left; Vertical = Top }
+|> Game.move { Horizontal = Left; Vertical = VCenter }
+|> Game.move { Horizontal = HCenter; Vertical = VCenter }
+|> Game.move { Horizontal = Right; Vertical = Bottom }
+|> Game.move { Horizontal = Right; Vertical = Top }
+|> Game.move { Horizontal = HCenter; Vertical = Top }
+|> Game.move { Horizontal = Left; Vertical = Bottom }
+|> fun game -> Board.render game.Board
 
 

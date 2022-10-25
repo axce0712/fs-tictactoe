@@ -23,7 +23,7 @@ type Board = private Board of Row * Row * Row
 type Position =
     { Horizontal: HorizontalPosition
       Vertical: VerticalPosition }
-
+      
 module Board =
     let empty : Board =
         Board (

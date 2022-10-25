@@ -20,40 +20,23 @@ type Cell =
     | Empty
     | Marked of Letter
 
-type Board = private { Value: Cell[,] }
+type Board = private { Value: Map<Position, Cell> }
 
 let emptyBoard : Board =
-    { Value = Array2D.create 3 3 Empty }
+    let m = Map.ofList [
+        for vp in [ Top; VCenter; Bottom ] do
+            for hp in [ Left; HCenter; Right ] do
+                ({ Horizontal = hp; Vertical = vp }, Empty)
+    ]
 
-let getY (position: VerticalPosition) : int =
-    match position with
-    | Top -> 0
-    | VCenter -> 1
-    | Bottom -> 2
-
-let getX (position: HorizontalPosition) : int =
-    match position with
-    | Left -> 0
-    | HCenter -> 1
-    | Right -> 2
+    { Value = m }
 
 let get (position: Position) (board: Board) : Cell =
-    let y = getY position.Vertical
-    let x = getX position.Horizontal
-    board.Value[y, x]
+    Map.find position board.Value
 
 let set (position: Position) (value: Cell) (board: Board) : Board =
-    let yToSet = getY position.Vertical
-    let xToSet = getX position.Horizontal
-    let newValue =
-        board.Value
-        |> Array2D.mapi (fun y x c ->
-            if yToSet = y && xToSet = x then
-                value
-            else
-                c)
-
-    { Value = newValue }
+    let m = Map.add position value board.Value
+    { Value = m }
 
 let tryMark (position: Position) (letter: Letter) (board: Board) : Board option =
     match get position board with
@@ -61,20 +44,8 @@ let tryMark (position: Position) (letter: Letter) (board: Board) : Board option 
     | Marked _ -> None
 
 let anySlotsRemaining (board: Board) : bool =
-    board.Value
-    |> Seq.cast<Cell>
-    |> Seq.exists (fun c ->
-        match c with
-        | Empty -> true
-        | Marked _ -> false)
-
-// let anySlotsRemaining (board: Board) : bool =
-//     let mutable exists = false
-//     for cell in board.Value do
-//         if not exists && cell = Empty then
-//             exists <- true
-
-//     exists
+    Map.values board.Value
+    |> Seq.exists (function Empty -> true | Marked _ -> false)
 
 let winningPositions : (Position * Position * Position) list =
     [
@@ -159,6 +130,19 @@ let move (position : Position) (game : Game) : Game =
     | Winner _ -> game
     | Tie -> game
 
+let printCell = function
+    | Empty -> " "
+    | Marked X -> "X"
+    | Marked O -> "O"
+
+let print (board: Board) =
+    Map.toSeq board.Value
+    |> Seq.sortBy (fun (p, _) -> p.Vertical, p.Horizontal)
+    |> Seq.map (snd >> printCell)
+    |> Seq.chunkBySize 3
+    |> Seq.map (String.concat " | ")
+    |> String.concat "\n--+---+--\n"
+
 initial
 |> move { Horizontal = Left; Vertical = Top }
 |> move { Horizontal = Left; Vertical = VCenter }
@@ -167,3 +151,4 @@ initial
 |> move { Horizontal = Right; Vertical = Top }
 |> move { Horizontal = HCenter; Vertical = Top }
 |> move { Horizontal = Left; Vertical = Bottom }
+|> fun game -> "\n" + print game.Board

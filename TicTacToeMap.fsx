@@ -112,6 +112,10 @@ type GameState =
 
 type Game = { Board: Board; State: GameState }
 
+type Command =
+    | Move of Position
+    | Restart
+
 let initial = { Board = emptyBoard; State = InProgress X }
 
 let move (position : Position) (game : Game) : Game =
@@ -143,12 +147,51 @@ let print (board: Board) =
     |> Seq.map (String.concat " | ")
     |> String.concat "\n--+---+--\n"
 
-initial
-|> move { Horizontal = Left; Vertical = Top }
-|> move { Horizontal = Left; Vertical = VCenter }
-|> move { Horizontal = HCenter; Vertical = VCenter }
-|> move { Horizontal = Right; Vertical = Bottom }
-|> move { Horizontal = Right; Vertical = Top }
-|> move { Horizontal = HCenter; Vertical = Top }
-|> move { Horizontal = Left; Vertical = Bottom }
-|> fun game -> "\n" + print game.Board
+let update cmd gameSoFar =
+    match cmd with
+    | Move position -> move position gameSoFar
+    | Restart -> initial
+
+let (|HorizontalPosition|_|) = function
+    | "0" -> Some Left
+    | "1" -> Some HCenter
+    | "2" -> Some Right
+    | _ -> None
+
+let (|VerticalPosition|_|) = function
+    | "0" -> Some Top
+    | "1" -> Some VCenter
+    | "2" -> Some Bottom
+    | _ -> None
+
+open System
+
+let rec run game =
+    let printGameStatus = function
+        | InProgress mark -> sprintf "Player %A turn" mark
+        | Tie -> sprintf "Tie"
+        | Winner mark -> sprintf "Player %A won!" mark
+
+    printfn "exit           Exit the game"
+    printfn "move (y) (x)   Mark a given position"
+    printfn "restart        Start a new game"
+    printf "> "
+    let input = Console.ReadLine()
+    let args = input.Split([| " " |], StringSplitOptions.RemoveEmptyEntries)
+    
+    match List.ofSeq args with
+    | [ "quit" ] | [ "q" ] -> ()
+    | [ "move"; VerticalPosition vp; HorizontalPosition hp ]
+    | [ "m"; VerticalPosition vp; HorizontalPosition hp ] ->
+        let newGame = update (Move { Horizontal = hp; Vertical = vp }) game
+        printfn "\n\n%s\n\n%s\n" (print newGame.Board) (printGameStatus newGame.State)
+        run newGame
+    | [ "restart" ] | [ "r" ] ->
+        let newGame = update Restart game
+        printfn "\n\n%s\n\n%s\n" (print newGame.Board) (printGameStatus newGame.State)
+        run newGame
+    | _ ->
+        printfn $"Unknown command '{input}'"
+        run game
+
+run initial

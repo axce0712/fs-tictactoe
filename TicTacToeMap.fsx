@@ -166,12 +166,13 @@ let (|VerticalPosition|_|) = function
 
 open System
 
-let rec run game =
-    let printGameStatus = function
-        | InProgress mark -> sprintf "Player %A turn" mark
-        | Tie -> sprintf "Tie"
-        | Winner mark -> sprintf "Player %A won!" mark
+let printGameStatus = function
+    | InProgress mark -> sprintf "Player %A turn" mark
+    | Tie -> sprintf "Tie"
+    | Winner mark -> sprintf "Player %A won!" mark
 
+let rec run game =
+    printfn "\n\n%s\n\n%s\n" (print game.Board) (printGameStatus game.State)
     printfn "exit           Exit the game"
     printfn "move (y) (x)   Mark a given position"
     printfn "restart        Start a new game"
@@ -184,11 +185,9 @@ let rec run game =
     | [ "move"; VerticalPosition vp; HorizontalPosition hp ]
     | [ "m"; VerticalPosition vp; HorizontalPosition hp ] ->
         let newGame = update (Move { Horizontal = hp; Vertical = vp }) game
-        printfn "\n\n%s\n\n%s\n" (print newGame.Board) (printGameStatus newGame.State)
         run newGame
     | [ "restart" ] | [ "r" ] ->
         let newGame = update Restart game
-        printfn "\n\n%s\n\n%s\n" (print newGame.Board) (printGameStatus newGame.State)
         run newGame
     | _ ->
         printfn $"Unknown command '{input}'"
